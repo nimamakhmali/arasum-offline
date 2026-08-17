@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arabic_summarizer"
+version = "0.1.0"
+description = "ماژول آفلاین خلاصه‌سازی متون عربی"
+authors = [{name = "BitForge Team"}]
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+where = ["src"]

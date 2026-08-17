@@ -1,0 +1,7 @@
+api:
+  host: "0.0.0.0"
+  port: 8000
+  timeout_seconds: 20     # الزام: پاسخ زیر 15 ثانیه + بافر
+
+cors:
+  allow_origins: ["*"]

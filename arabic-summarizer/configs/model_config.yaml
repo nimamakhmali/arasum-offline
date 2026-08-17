@@ -1,0 +1,13 @@
+model:
+  base_model_name: "moussaKam/AraBART"   # یا مدل نهایی انتخاب‌شده بعد از model_selection
+  production_path: "models/production/model.onnx"
+  tokenizer_path: "models/production/tokenizer"
+  max_input_tokens: 1024
+  max_output_tokens: 256
+
+summarization:
+  default_ratio: 0.2       # 20% طول متن اصلی
+  min_ratio: 0.1
+  max_ratio: 0.3
+  min_input_words: 300
+  max_input_words: 3000

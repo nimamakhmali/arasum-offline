@@ -1,0 +1,29 @@
+# Core
+transformers>=4.35.0
+torch>=2.0.0
+onnx>=1.15.0
+onnxruntime>=1.16.0
+
+# Arabic NLP
+camel-tools>=1.5.0
+nltk>=3.8.0
+
+# API
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.4.0
+
+# UI
+gradio>=4.0.0
+
+# Evaluation
+rouge-score>=0.1.2
+pandas>=2.0.0
+
+# Utils
+pyyaml>=6.0
+diskcache>=5.6.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0

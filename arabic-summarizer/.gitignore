@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Models & Data (سنگین هستند، نباید در گیت باشند)
+models/base/*
+models/finetuned/*
+models/production/*
+!models/**/.gitkeep
+
+data/raw/*
+data/processed/*
+!data/**/.gitkeep
+
+# Cache & Logs
+cache_store/*
+logs/*
+!cache_store/.gitkeep
+!logs/.gitkeep
+
+# Env
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

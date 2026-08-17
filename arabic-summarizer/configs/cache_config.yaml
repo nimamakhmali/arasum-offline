@@ -1,0 +1,4 @@
+cache:
+  enabled: true
+  backend: "sqlite"          # گزینه‌های آینده: memory, redis
+  db_path: "cache_store/summary_cache.db"
