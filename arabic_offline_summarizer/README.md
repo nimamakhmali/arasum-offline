@@ -1,1 +1,0 @@
-# Arabic Offline Summarizer
