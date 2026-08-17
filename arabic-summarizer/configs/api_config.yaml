@@ -1,7 +1,13 @@
-api:
-  host: "0.0.0.0"
+server:
+  host: "127.0.0.1"
   port: 8000
-  timeout_seconds: 20     # الزام: پاسخ زیر 15 ثانیه + بافر
+  reload: false
+  workers: 1
+
+limits:
+  max_input_chars: 25000
+  request_timeout_seconds: 90
 
 cors:
-  allow_origins: ["*"]
+  allow_origins: ["http://localhost:7860"]
+  allow_methods: ["GET", "POST"]

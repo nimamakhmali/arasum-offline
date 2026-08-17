@@ -1,4 +1,6 @@
 cache:
   enabled: true
-  backend: "sqlite"          # گزینه‌های آینده: memory, redis
-  db_path: "cache_store/summary_cache.db"
+  storage_path: "storage/cache/"
+  max_entries: 500
+  ttl_hours: 24
+  serialize_format: "json"
