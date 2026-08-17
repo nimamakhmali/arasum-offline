@@ -310,3 +310,90 @@ class TestArabicPreprocessingPipeline:
         assert isinstance(result.cleaned_text, str)
         assert result.word_count >= 300
         assert len(result.cleaned_text) > 0
+        
+        
+        
+"""
+تست‌های اضافه برای NLTK و pipeline کامل.
+این کلاس‌ها به فایل test_preprocessing.py موجود اضافه می‌شوند.
+"""
+
+# ── این کلاس‌ها به انتهای فایل test_preprocessing.py اضافه شوند ──
+
+
+class TestNLTKIntegration:
+    """
+    تست‌های مربوط به یکپارچه‌سازی NLTK.
+    این تست‌ها فقط اگر NLTK نصب باشد معنادار هستند.
+    """
+
+    def test_pipeline_reports_nltk_status(self):
+        """pipeline باید وضعیت NLTK را در نتیجه گزارش دهد."""
+        pipeline = ArabicPreprocessingPipeline(
+            use_camel_tools=False,
+            use_nltk=True,
+        )
+        info = pipeline.get_info()
+        # فقط بررسی می‌کنیم که کلید وجود دارد
+        assert "nltk_available" in info
+
+    def test_pipeline_without_nltk(self):
+        """
+        pipeline بدون NLTK باید بدون خطا کار کند.
+        nltk_used در نتیجه باید False باشد.
+        """
+        pipeline = ArabicPreprocessingPipeline(
+            use_camel_tools=False,
+            use_nltk=False,
+        )
+        text = _make_arabic_text(400)
+        result = pipeline.run(text)
+        assert result.nltk_used is False
+
+    def test_pipeline_stopword_removal_not_applied_by_default(self):
+        """
+        stopword removal به صورت پیش‌فرض اعمال نمی‌شود.
+        removed_stopwords باید ۰ باشد.
+        """
+        pipeline = ArabicPreprocessingPipeline(use_camel_tools=False)
+        text = _make_arabic_text(400)
+        result = pipeline.run(text)
+        assert result.removed_stopwords == 0
+
+    def test_pipeline_info_returns_dict(self):
+        """get_info باید دیکشنری برگرداند."""
+        pipeline = ArabicPreprocessingPipeline(use_camel_tools=False)
+        info = pipeline.get_info()
+        assert isinstance(info, dict)
+        assert "nltk_available" in info
+        assert "camel_tools_available" in info
+        assert "stopword_removal_enabled" in info
+
+
+class TestPreprocessingResult:
+    """تست‌های dataclass PreprocessingResult."""
+
+    def test_result_default_removed_stopwords(self):
+        """مقدار پیش‌فرض removed_stopwords باید ۰ باشد."""
+        result = PreprocessingResult(
+            cleaned_text="test",
+            word_count=10,
+            camel_tools_used=False,
+            nltk_used=False,
+        )
+        assert result.removed_stopwords == 0
+
+    def test_result_fields_accessible(self):
+        """تمام فیلدهای نتیجه باید قابل دسترسی باشند."""
+        result = PreprocessingResult(
+            cleaned_text="نص عربي",
+            word_count=2,
+            camel_tools_used=True,
+            nltk_used=True,
+            removed_stopwords=5,
+        )
+        assert result.cleaned_text == "نص عربي"
+        assert result.word_count == 2
+        assert result.camel_tools_used is True
+        assert result.nltk_used is True
+        assert result.removed_stopwords == 5        
