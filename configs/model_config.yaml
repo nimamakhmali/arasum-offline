@@ -1,0 +1,18 @@
+model:
+  name: "AraBART"
+  base_model_id: "moussaKam/AraBART"
+  finetuned_path: "models/finetuned/"
+  quantized_path: "models/quantized/onnx_int8/"
+  engine: "onnx"                    # onnx | pytorch
+
+generation:
+  min_length_ratio: 0.10
+  max_length_ratio: 0.30
+  default_ratio: 0.20
+  num_beams: 4
+  early_stopping: true
+  no_repeat_ngram_size: 3
+
+input:
+  min_words: 300
+  max_words: 3000
