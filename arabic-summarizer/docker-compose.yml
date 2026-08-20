@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./cache_store:/app/cache_store
+      - ./logs:/app/logs
+    environment:
+      - MODEL_PATH=/app/models/production/model.onnx

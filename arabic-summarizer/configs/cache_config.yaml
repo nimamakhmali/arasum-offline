@@ -1,0 +1,6 @@
+cache:
+  enabled: true
+  storage_path: "storage/cache/"
+  max_entries: 500
+  ttl_hours: 24
+  serialize_format: "json"

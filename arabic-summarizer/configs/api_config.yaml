@@ -1,0 +1,13 @@
+server:
+  host: "127.0.0.1"
+  port: 8000
+  reload: false
+  workers: 1
+
+limits:
+  max_input_chars: 25000
+  request_timeout_seconds: 90
+
+cors:
+  allow_origins: ["http://localhost:7860"]
+  allow_methods: ["GET", "POST"]
