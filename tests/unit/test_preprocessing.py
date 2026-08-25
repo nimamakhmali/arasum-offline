@@ -93,9 +93,22 @@ class TestArabicNormalizer:
         assert result == "الحمد لله"
 
     def test_remove_tatweel(self, normalizer):
-        """کشیده باید حذف شود."""
-        assert normalizer.remove_tatweel("كتاااب") == "كتاب"
+        """
+        کاراکتر تطویل (U+0640) باید حذف شود.
+        توجه: الف تکراری (ا ا ا) با تطویل (ـ) فرق دارد.
+        تطویل کاراکتر خاص U+0640 است که برای کشیدن بصری کلمه استفاده می‌شود.
+        """
+        # كتـــاب با تطویل واقعی U+0640
+        word_with_tatweel = "ك\u0640\u0640ت\u0640اب"
+        result = normalizer.remove_tatweel(word_with_tatweel)
+        assert "\u0640" not in result
+        assert "كتاب" in result
 
+    def test_remove_tatweel_alef_unchanged(self, normalizer):
+        """الف تکراری نباید توسط remove_tatweel تغییر کند."""
+        # این الف عادی است نه تطویل
+        assert normalizer.remove_tatweel("كتاااب") == "كتاااب"
+        
     def test_normalize_whitespace_multiple_spaces(self, normalizer):
         """چند فاصله باید به یک فاصله تبدیل شود."""
         assert normalizer.normalize_whitespace("كلمة   أخرى") == "كلمة أخرى"
