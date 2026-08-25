@@ -3,7 +3,7 @@ model:
   base_model_id: "moussaKam/AraBART"
   finetuned_path: "models/finetuned/"
   quantized_path: "models/quantized/onnx_int8/"
-  engine: "onnx"                    # onnx | pytorch
+  engine: "onnx"
 
 generation:
   min_length_ratio: 0.10
@@ -16,3 +16,87 @@ generation:
 input:
   min_words: 300
   max_words: 3000
+
+
+# تنظیمات مقایسه مدل‌های پایه (TASK-102)
+
+benchmark:
+  num_samples: 20
+  seed: 42
+  device: "cpu"
+  output_dir: "reports"
+  save_model_outputs: true
+  max_input_tokens: 1024
+
+  # پارامترهای تولید خلاصه - برای همه مدل‌ها پیش‌فرض
+  generation_params:
+    max_new_tokens: 200
+    min_new_tokens: 30
+    num_beams: 4
+    length_penalty: 1.0
+    early_stopping: true
+    repetition_penalty: 1.2
+    no_repeat_ngram_size: 3
+
+  # وزن‌های ranking مدل‌ها
+  ranking_weights:
+    rouge1: 0.25
+    rouge2: 0.35
+    rougeL: 0.30
+    speed: 0.10
+
+  # مدل‌های کاندید
+  candidate_models:
+    - model_id: "moussaKam/AraBART"
+      model_name: "AraBART"
+      architecture: "BART"
+      model_type: "seq2seq"
+      tokenizer_id: "moussaKam/AraBART"
+      max_input_length: 1024
+      enabled: true
+      priority: 1
+      arabic_optimized: true
+      task_prefix: null
+      notes: "مدل اصلی پیشنهادی - pretrain شده فقط روی عربی فصیح"
+      generation_params_override: {}
+
+    - model_id: "UBC-NLP/AraT5-base-title-generation"
+      model_name: "AraT5"
+      architecture: "T5"
+      model_type: "seq2seq"
+      tokenizer_id: "UBC-NLP/AraT5-base-title-generation"
+      max_input_length: 512
+      enabled: true
+      priority: 2
+      arabic_optimized: true
+      task_prefix: "summarize: "
+      notes: "مدل جایگزین پشتیبان - چندوظیفه‌ای عربی"
+      generation_params_override:
+        max_new_tokens: 150
+
+    - model_id: "google/mt5-small"
+      model_name: "mT5-small"
+      architecture: "T5"
+      model_type: "seq2seq"
+      tokenizer_id: "google/mt5-small"
+      max_input_length: 512
+      enabled: true
+      priority: 3
+      arabic_optimized: false
+      task_prefix: "summarize: "
+      notes: "مدل چندزبانه سبک - baseline مقایسه"
+      generation_params_override:
+        max_new_tokens: 150
+
+    - model_id: "facebook/mbart-large-cc25"
+      model_name: "mBART-large"
+      architecture: "BART"
+      model_type: "seq2seq"
+      tokenizer_id: "facebook/mbart-large-cc25"
+      max_input_length: 1024
+      enabled: false
+      priority: 4
+      arabic_optimized: false
+      task_prefix: null
+      notes: "مدل بزرگ چندزبانه - غیرفعال به دلیل حجم زیاد"
+      generation_params_override: {}

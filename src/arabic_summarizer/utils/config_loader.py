@@ -15,8 +15,25 @@ from arabic_summarizer.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# مسیر پیش‌فرض پوشه configs نسبت به ریشه پروژه
-_DEFAULT_CONFIGS_DIR = Path(__file__).resolve().parents[4] / "configs"
+
+def _find_project_root() -> Path:
+    """
+    ریشه پروژه را با جستجوی pyproject.toml پیدا می‌کند.
+    
+    از محل فایل جاری شروع می‌کند و به سمت بالا می‌رود
+    تا pyproject.toml پیدا شود. این روش مستقل از تعداد
+    پوشه‌های تودرتو است.
+    """
+    current = Path(__file__).resolve()
+    for parent in [current, *current.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    # fallback: اگر پیدا نشد از cwd استفاده کن
+    return Path.cwd()
+
+
+_PROJECT_ROOT = _find_project_root()
+_DEFAULT_CONFIGS_DIR = _PROJECT_ROOT / "configs"
 
 
 class ConfigLoader:

@@ -1,0 +1,2 @@
+model_id,model_name,architecture,status,rouge1,rouge2,rougeL,avg_inference_time,median_inference_time,load_time,successful_samples,failed_samples,parameter_count
+google/mt5-small,mT5-small,T5,success,0.0721,0.0196,0.0546,1.9762,1.7411,6.1353,3,0,300176768

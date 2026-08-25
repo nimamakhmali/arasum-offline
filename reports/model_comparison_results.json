@@ -1,0 +1,64 @@
+{
+  "benchmark_metadata": {
+    "timestamp": "2026-08-25T12:43:43.636476+00:00",
+    "device": "cpu",
+    "num_samples_requested": 3,
+    "num_samples_actual": 3,
+    "seed": 42,
+    "dataset_source": "data/benchmark/arabic_benchmark_samples.jsonl",
+    "generation_config": {
+      "max_new_tokens": 200,
+      "min_new_tokens": 30,
+      "num_beams": 4,
+      "length_penalty": 1.0,
+      "early_stopping": true,
+      "repetition_penalty": 1.2,
+      "no_repeat_ngram_size": 3
+    },
+    "ranking_weights": {
+      "rouge1": 0.25,
+      "rouge2": 0.35,
+      "rougeL": 0.3,
+      "speed": 0.1
+    }
+  },
+  "models": [
+    {
+      "model_id": "google/mt5-small",
+      "model_name": "mT5-small",
+      "architecture": "T5",
+      "status": "success",
+      "error_message": null,
+      "metrics": {
+        "rouge1": 0.0721,
+        "rouge2": 0.0196,
+        "rougeL": 0.0546
+      },
+      "performance": {
+        "load_time_seconds": 6.1353,
+        "total_inference_time_seconds": 5.9286,
+        "average_inference_time_seconds": 1.9762,
+        "median_inference_time_seconds": 1.7411
+      },
+      "samples": {
+        "total": 3,
+        "successful": 3,
+        "failed": 0
+      },
+      "parameter_count": 300176768
+    }
+  ],
+  "recommended_model": {
+    "model_id": "google/mt5-small",
+    "model_name": "mT5-small",
+    "ranking_score": 1.0,
+    "reason": "بالاترین امتیاز ranking (score=1.0000) با ROUGE-1=0.072, ROUGE-2=0.020, ROUGE-L=0.055 و میانگین زمان inference=1.98s. وزن‌های استفاده‌شده: rouge1=0.25, rouge2=0.35, rougeL=0.3, speed=0.1.",
+    "all_rankings": [
+      {
+        "model_name": "mT5-small",
+        "model_id": "google/mt5-small",
+        "ranking_score": 1.0
+      }
+    ]
+  }
+}
