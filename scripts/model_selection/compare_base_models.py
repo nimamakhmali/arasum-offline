@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import re
 # اضافه کردن src به path برای import
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_PROJECT_ROOT / "src"))
@@ -281,17 +282,21 @@ def load_benchmark_samples(
 # Model Runner
 
 
-
 class ModelRunner:
     """
     بارگذاری و اجرای inference یک مدل Seq2Seq.
 
-    این کلاس:
-    - مدل و tokenizer را بارگذاری می‌کند
-    - task prefix مخصوص مدل را اعمال می‌کند
-    - زمان preprocessing و inference را جداگانه اندازه‌گیری می‌کند
-    - generation parameters را از config می‌خواند
+    اصلاحات نسبت به نسخه قبل:
+    - پشتیبانی از forced_bos_token_id برای mBART
+    - تشخیص خودکار خروجی‌های معیوب (مثل <extra_id_X>)
+    - لاگ بهتر برای debugging
     """
+
+    # الگوی خروجی معیوب mT5/T5 بدون fine-tuning
+    _GARBAGE_OUTPUT_PATTERN = re.compile(
+        r"^(\s*<extra_id_\d+>\s*){2,}",
+        re.MULTILINE,
+    )
 
     def __init__(
         self,
@@ -302,26 +307,19 @@ class ModelRunner:
         self._cfg = model_cfg
         self._device = device
         self._base_gen_params = {**base_generation_params}
-        # override مخصوص این مدل
         self._base_gen_params.update(model_cfg.generation_params_override)
         self._model = None
         self._tokenizer = None
 
     def load(self) -> float:
-        """
-        مدل و tokenizer را بارگذاری می‌کند.
-
-        Returns:
-            زمان بارگذاری به ثانیه
-
-        Raises:
-            RuntimeError: اگر بارگذاری ناموفق باشد
-        """
+        """مدل و tokenizer را بارگذاری می‌کند."""
         import torch
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
         logger.info(
-            "بارگذاری مدل: %s از %s ...", self._cfg.model_name, self._cfg.model_id
+            "بارگذاری مدل: %s از %s ...",
+            self._cfg.model_name,
+            self._cfg.model_id,
         )
         t0 = time.perf_counter()
 
@@ -352,27 +350,76 @@ class ModelRunner:
             ) from exc
 
     def get_parameter_count(self) -> int | None:
-        """تعداد پارامترهای مدل."""
         if self._model is None:
             return None
         return sum(p.numel() for p in self._model.parameters())
+
+    def _is_garbage_output(self, text: str) -> bool:
+        """
+        بررسی می‌کند که خروجی مدل معیوب است یا نه.
+
+        مدل‌های T5/mT5 بدون fine-tuning روی summarization
+        ممکن است خروجی‌هایی مثل:
+            <extra_id_0> ... <extra_id_10> ...
+        تولید کنند که هیچ معنایی ندارند.
+        """
+        if not text or not text.strip():
+            return True
+        if self._GARBAGE_OUTPUT_PATTERN.search(text):
+            return True
+        # اگر بیش از ۵۰٪ توکن‌های خروجی special token باشند
+        special_token_count = text.count("<extra_id_")
+        total_words = len(text.split())
+        if total_words > 0 and special_token_count / total_words > 0.3:
+            return True
+        return False
+
+    def _build_generation_kwargs(self, input_ids) -> dict[str, Any]:
+        """
+        پارامترهای generation را آماده می‌کند.
+
+        برای mBART: forced_bos_token_id از config خوانده می‌شود.
+        اگر در generation_params_override موجود باشد، از آن استفاده می‌شود.
+        """
+        kwargs = {**self._base_gen_params}
+
+        # اگر forced_bos_token_id در params بود، آن را اعمال کن
+        # (برای mBART که نیاز به تعیین زبان هدف دارد)
+        if "forced_bos_token_id" not in kwargs:
+            # تلاش برای تشخیص خودکار از tokenizer
+            if (
+                hasattr(self._tokenizer, "lang_code_to_id")
+                and "ar_AR" in self._tokenizer.lang_code_to_id
+            ):
+                kwargs["forced_bos_token_id"] = (
+                    self._tokenizer.lang_code_to_id["ar_AR"]
+                )
+                logger.debug(
+                    "forced_bos_token_id برای mBART تنظیم شد: %d",
+                    kwargs["forced_bos_token_id"],
+                )
+
+        return kwargs
 
     def generate(self, text: str) -> tuple[str, float, float]:
         """
         خلاصه متن ورودی را تولید می‌کند.
 
-        Args:
-            text: متن عربی ورودی
-
         Returns:
             (خلاصه تولیدشده، زمان preprocessing، زمان inference)
+
+        Raises:
+            RuntimeError: اگر مدل بارگذاری نشده باشد
+            ValueError: اگر خروجی معیوب باشد
         """
         import torch
 
         if self._model is None or self._tokenizer is None:
-            raise RuntimeError("مدل بارگذاری نشده. ابتدا load() را فراخوانی کنید.")
+            raise RuntimeError(
+                "مدل بارگذاری نشده. ابتدا load() را فراخوانی کنید."
+            )
 
-        #  Preprocessing 
+        # ── Preprocessing ─────────────────────────────────────
         t_pre = time.perf_counter()
         input_text = text
         if self._cfg.task_prefix:
@@ -387,15 +434,17 @@ class ModelRunner:
         inputs = {k: v.to(self._device) for k, v in inputs.items()}
         preprocessing_time = time.perf_counter() - t_pre
 
-        #  Inference 
+        # ── Inference ─────────────────────────────────────────
         if self._device == "cuda":
             torch.cuda.synchronize()
 
         t_inf = time.perf_counter()
+        gen_kwargs = self._build_generation_kwargs(inputs.get("input_ids"))
+
         with torch.no_grad():
             output_ids = self._model.generate(
                 **inputs,
-                **self._base_gen_params,
+                **gen_kwargs,
             )
 
         if self._device == "cuda":
@@ -403,13 +452,26 @@ class ModelRunner:
 
         inference_time = time.perf_counter() - t_inf
 
-        # ─ Decode 
+        # ── Decode ────────────────────────────────────────────
         summary = self._tokenizer.decode(
             output_ids[0],
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True,
-        )
-        return summary.strip(), preprocessing_time, inference_time
+        ).strip()
+
+        # بررسی کیفیت خروجی
+        if self._is_garbage_output(summary):
+            logger.warning(
+                "مدل %s خروجی معیوب تولید کرد: '%s...'",
+                self._cfg.model_name,
+                summary[:80],
+            )
+            raise ValueError(
+                f"خروجی مدل {self._cfg.model_name} معیوب است "
+                f"(احتمالاً نیاز به fine-tuning دارد): {summary[:80]}"
+            )
+
+        return summary, preprocessing_time, inference_time
 
     def unload(self) -> None:
         """مدل را از حافظه آزاد می‌کند."""
@@ -422,8 +484,6 @@ class ModelRunner:
         if self._device == "cuda" and torch.cuda.is_available():
             torch.cuda.empty_cache()
         logger.debug("مدل %s از حافظه آزاد شد.", self._cfg.model_name)
-
-
 
 # Benchmark Runner
 

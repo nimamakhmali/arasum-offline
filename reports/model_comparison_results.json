@@ -1,11 +1,11 @@
 {
   "benchmark_metadata": {
-    "timestamp": "2026-08-25T12:43:43.636476+00:00",
+    "timestamp": "2026-08-29T17:45:56.393555+00:00",
     "device": "cpu",
-    "num_samples_requested": 3,
-    "num_samples_actual": 3,
+    "num_samples_requested": 20,
+    "num_samples_actual": 20,
     "seed": 42,
-    "dataset_source": "data/benchmark/arabic_benchmark_samples.jsonl",
+    "dataset_source": "data/processed/xlsum_arabic/validation.jsonl",
     "generation_config": {
       "max_new_tokens": 200,
       "min_new_tokens": 30,
@@ -24,40 +24,69 @@
   },
   "models": [
     {
-      "model_id": "google/mt5-small",
-      "model_name": "mT5-small",
-      "architecture": "T5",
+      "model_id": "moussaKam/AraBART",
+      "model_name": "AraBART",
+      "architecture": "BART",
       "status": "success",
       "error_message": null,
       "metrics": {
-        "rouge1": 0.0721,
-        "rouge2": 0.0196,
-        "rougeL": 0.0546
+        "rouge1": 0.1023,
+        "rouge2": 0.0326,
+        "rougeL": 0.0738
       },
       "performance": {
-        "load_time_seconds": 6.1353,
-        "total_inference_time_seconds": 5.9286,
-        "average_inference_time_seconds": 1.9762,
-        "median_inference_time_seconds": 1.7411
+        "load_time_seconds": 5.7486,
+        "total_inference_time_seconds": 197.3277,
+        "average_inference_time_seconds": 9.8664,
+        "median_inference_time_seconds": 9.487
       },
       "samples": {
-        "total": 3,
-        "successful": 3,
+        "total": 20,
+        "successful": 20,
         "failed": 0
+      },
+      "parameter_count": 139221504
+    },
+    {
+      "model_id": "google/mt5-small",
+      "model_name": "mT5-small",
+      "architecture": "T5",
+      "status": "partial",
+      "error_message": null,
+      "metrics": {
+        "rouge1": 0.0507,
+        "rouge2": 0.0032,
+        "rougeL": 0.0433
+      },
+      "performance": {
+        "load_time_seconds": 8.0702,
+        "total_inference_time_seconds": 55.324,
+        "average_inference_time_seconds": 3.4578,
+        "median_inference_time_seconds": 3.6085
+      },
+      "samples": {
+        "total": 20,
+        "successful": 16,
+        "failed": 4
       },
       "parameter_count": 300176768
     }
   ],
   "recommended_model": {
-    "model_id": "google/mt5-small",
-    "model_name": "mT5-small",
-    "ranking_score": 1.0,
-    "reason": "بالاترین امتیاز ranking (score=1.0000) با ROUGE-1=0.072, ROUGE-2=0.020, ROUGE-L=0.055 و میانگین زمان inference=1.98s. وزن‌های استفاده‌شده: rouge1=0.25, rouge2=0.35, rougeL=0.3, speed=0.1.",
+    "model_id": "moussaKam/AraBART",
+    "model_name": "AraBART",
+    "ranking_score": 0.9,
+    "reason": "بالاترین امتیاز ranking (score=0.9000) با ROUGE-1=0.102, ROUGE-2=0.033, ROUGE-L=0.074 و میانگین زمان inference=9.87s. وزن‌های استفاده‌شده: rouge1=0.25, rouge2=0.35, rougeL=0.3, speed=0.1.",
     "all_rankings": [
+      {
+        "model_name": "AraBART",
+        "model_id": "moussaKam/AraBART",
+        "ranking_score": 0.9
+      },
       {
         "model_name": "mT5-small",
         "model_id": "google/mt5-small",
-        "ranking_score": 1.0
+        "ranking_score": 0.1
       }
     ]
   }

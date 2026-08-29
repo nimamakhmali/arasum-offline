@@ -1,8 +1,15 @@
+# ══════════════════════════════════════════════════════════
+# تنظیمات مدل اصلی (برای inference بعد از Fine-tuning)
+# ══════════════════════════════════════════════════════════
+
 model:
   name: "AraBART"
   base_model_id: "moussaKam/AraBART"
   finetuned_path: "models/finetuned/"
   quantized_path: "models/quantized/onnx_int8/"
+  # اصلاح: اضافه کردن کلیدهایی که api/dependencies.py انتظار دارد
+  production_path: "models/quantized/onnx_int8/"
+  tokenizer_path: "models/finetuned/"
   engine: "onnx"
 
 generation:
@@ -18,7 +25,14 @@ input:
   max_words: 3000
 
 
+# ══════════════════════════════════════════════════════════
 # تنظیمات مقایسه مدل‌های پایه (TASK-102)
+#
+# نکته یکپارچگی:
+#   model_id و tokenizer_id در اینجا باید دقیقاً با
+#   docs/model_selection_report.md یکسان باشند.
+#   هرگونه تغییر باید در هر دو فایل اعمال شود.
+# ══════════════════════════════════════════════════════════
 
 benchmark:
   num_samples: 20
@@ -28,7 +42,7 @@ benchmark:
   save_model_outputs: true
   max_input_tokens: 1024
 
-  # پارامترهای تولید خلاصه - برای همه مدل‌ها پیش‌فرض
+  # پارامترهای تولید خلاصه - پیش‌فرض برای همه مدل‌ها
   generation_params:
     max_new_tokens: 200
     min_new_tokens: 30
@@ -38,15 +52,17 @@ benchmark:
     repetition_penalty: 1.2
     no_repeat_ngram_size: 3
 
-  # وزن‌های ranking مدل‌ها
+  # وزن‌های ranking
   ranking_weights:
     rouge1: 0.25
     rouge2: 0.35
     rougeL: 0.30
     speed: 0.10
 
-  # مدل‌های کاندید
+  # ── مدل‌های کاندید ──────────────────────────────────────
+  # اصلاح: تمام model_id ها با model_selection_report.md یکسان شدند
   candidate_models:
+
     - model_id: "moussaKam/AraBART"
       model_name: "AraBART"
       architecture: "BART"
@@ -57,20 +73,24 @@ benchmark:
       priority: 1
       arabic_optimized: true
       task_prefix: null
-      notes: "مدل اصلی پیشنهادی - pretrain شده فقط روی عربی فصیح"
+      notes: "کاندید اصلی اولیه - pretrain شده فقط روی عربی فصیح"
       generation_params_override: {}
 
-    - model_id: "UBC-NLP/AraT5-base-title-generation"
+    - model_id: "UBC-NLP/AraT5-base"
+      # اصلاح: از AraT5-base-title-generation به AraT5-base
+      # دلیل: AraT5-base مدل عمومی‌تر است و برای summarization
+      # مناسب‌تر از نسخه title-generation است.
+      # model_selection_report.md هم همین ID را ذکر کرده.
       model_name: "AraT5"
       architecture: "T5"
       model_type: "seq2seq"
-      tokenizer_id: "UBC-NLP/AraT5-base-title-generation"
+      tokenizer_id: "UBC-NLP/AraT5-base"
       max_input_length: 512
-      enabled: true
+      enabled: false
       priority: 2
       arabic_optimized: true
       task_prefix: "summarize: "
-      notes: "مدل جایگزین پشتیبان - چندوظیفه‌ای عربی"
+      notes: "کاندید جایگزین - چندوظیفه‌ای عربی"
       generation_params_override:
         max_new_tokens: 150
 
@@ -90,13 +110,17 @@ benchmark:
 
     - model_id: "facebook/mbart-large-cc25"
       model_name: "mBART-large"
-      architecture: "BART"
+      architecture: "mBART"
       model_type: "seq2seq"
       tokenizer_id: "facebook/mbart-large-cc25"
       max_input_length: 1024
+      # غیرفعال به دلیل حجم زیاد (2.4GB) و نیاز به forced_bos_token_id
       enabled: false
       priority: 4
       arabic_optimized: false
       task_prefix: null
-      notes: "مدل بزرگ چندزبانه - غیرفعال به دلیل حجم زیاد"
-      generation_params_override: {}
+      notes: "مدل بزرگ چندزبانه - غیرفعال به دلیل حجم"
+      generation_params_override:
+        # mBART نیاز به forced_bos_token_id دارد
+        # ar_AR = زبان عربی در mBART tokenizer
+        forced_bos_token_id: 68

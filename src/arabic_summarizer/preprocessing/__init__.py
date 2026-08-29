@@ -4,8 +4,13 @@
 این ماژول سه لایه پردازش را به ترتیب اجرا می‌کند:
 1. ArabicTextCleaner   : حذف نویز و کاراکترهای غیرضروری
 2. ArabicNormalizer    : نرمال‌سازی حروف و اعراب
-3. NLTK                : حذف stopwords و tokenization (اگر نصب باشد)
-4. CamelTools          : نرمال‌سازی تکمیلی (اگر نصب باشد)
+3. CamelTools          : نرمال‌سازی تکمیلی (اگر نصب باشد)
+4. NLTK                : stopword removal (اختیاری، فقط از cache محلی)
+
+نکته مهم Offline:
+    این ماژول هیچ‌گاه در زمان اجرا چیزی از اینترنت دانلود نمی‌کند.
+    اگر NLTK نصب نباشد یا داده‌های آن از قبل آماده نباشند،
+    سیستم gracefully به حالت بدون NLTK می‌افتد.
 
 استفاده:
     from arabic_summarizer.preprocessing import ArabicPreprocessingPipeline
@@ -57,6 +62,10 @@ class ArabicPreprocessingPipeline:
     این کلاس تمام مراحل پیش‌پردازش را به ترتیب صحیح اجرا می‌کند.
     اگر NLTK یا CamelTools نصب نباشند، سیستم بدون خطا ادامه می‌دهد
     و از ماژول‌های داخلی استفاده می‌کند.
+
+    اصل Offline:
+        هیچ چیزی در زمان اجرا دانلود نمی‌شود.
+        اگر resource موجود نباشد → gracefully disable می‌شود.
     """
 
     def __init__(
@@ -74,9 +83,6 @@ class ArabicPreprocessingPipeline:
             max_words        : حداکثر کلمات مجاز در ورودی
             normalize_teh    : آیا تاء مربوطه نرمال شود
             remove_stopwords : آیا stopword های عربی حذف شوند
-                               توجه: برای خلاصه‌سازی abstractive
-                               توصیه نمی‌شود چون ممکن است معنا تغییر کند.
-                               پیش‌فرض False برای این دلیل است.
             use_camel_tools  : آیا از CamelTools استفاده شود
             use_nltk         : آیا از NLTK استفاده شود
         """
@@ -85,7 +91,6 @@ class ArabicPreprocessingPipeline:
         self._normalize_teh = normalize_teh
         self._remove_stopwords = remove_stopwords
 
-        # بارگذاری lazy - فقط اگر نیاز باشد
         self._nltk_stopwords: set[str] | None = None
         self._camel_normalizer = None
 
@@ -100,27 +105,33 @@ class ArabicPreprocessingPipeline:
     @staticmethod
     def _try_load_nltk() -> set[str] | None:
         """
-        بارگذاری stopwords عربی از NLTK.
+        بارگذاری stopwords عربی از NLTK - فقط از cache محلی.
 
-        NLTK برای این پروژه دو کاربرد دارد:
-        1. دریافت لیست stopwords عربی
-        2. tokenization کمکی برای شمارش دقیق‌تر کلمات
+        ⚠️  اصل مهم Offline:
+            این متد هرگز nltk.download() صدا نمی‌زند.
+            اگر داده‌های NLTK از قبل روی سیستم نصب نباشند،
+            None برمی‌گرداند و pipeline بدون NLTK ادامه می‌دهد.
 
-        اگر NLTK نصب نباشد یا داده‌های آن دانلود نشده باشند،
-        None برمی‌گرداند و هشدار لاگ می‌کند.
+        برای نصب اولیه (یک بار، قبل از استقرار):
+            python -c "import nltk; nltk.download('stopwords')"
         """
         try:
             import nltk
             from nltk.corpus import stopwords
 
-            # تلاش برای دانلود اگر وجود نداشت
+            # فقط از داده‌های موجود محلی استفاده می‌کنیم
+            # هیچ دانلودی انجام نمی‌شود
             try:
                 arabic_stopwords = set(stopwords.words("arabic"))
             except LookupError:
-                logger.info("دانلود stopwords عربی از NLTK ...")
-                nltk.download("stopwords", quiet=True)
-                nltk.download("punkt", quiet=True)
-                arabic_stopwords = set(stopwords.words("arabic"))
+                # داده‌های NLTK نصب نیستند - gracefully disable
+                logger.warning(
+                    "داده‌های NLTK روی سیستم نصب نیستند. "
+                    "stopword removal غیرفعال می‌شود. "
+                    "برای نصب یک‌بار اجرا کنید: "
+                    "python -c \"import nltk; nltk.download('stopwords')\""
+                )
+                return None
 
             logger.info(
                 "NLTK با موفقیت بارگذاری شد. تعداد stopwords: %d",
@@ -143,10 +154,7 @@ class ArabicPreprocessingPipeline:
         """
         بارگذاری ابزارهای نرمال‌سازی CamelTools.
 
-        CamelTools ابزار تخصصی پردازش متن عربی است که
-        normalize های دقیق‌تری نسبت به regex ساده دارد.
-
-        اگر نصب نباشد None برمی‌گرداند.
+        اگر نصب نباشد None برمی‌گرداند - بدون هیچ دانلودی.
         """
         try:
             from camel_tools.utils.normalize import (
@@ -181,13 +189,6 @@ class ArabicPreprocessingPipeline:
         """
         حذف stopwords عربی از متن.
 
-        نکته مهم: این عملیات برای خلاصه‌سازی extractive مفیدتر است.
-        برای خلاصه‌سازی abstractive (که این پروژه از آن استفاده می‌کند)
-        معمولاً stopword removal روی متن ورودی انجام نمی‌شود چون
-        مدل ترانسفورمر خودش اهمیت کلمات را یاد می‌گیرد.
-
-        با این حال برای آماده‌سازی دیتاست آموزشی مفید است.
-
         Returns:
             (متن بدون stopword، تعداد کلمات حذف‌شده)
         """
@@ -210,8 +211,7 @@ class ArabicPreprocessingPipeline:
             text                  : متن خام عربی
             apply_stopword_removal: آیا stopword removal اجرا شود.
                                     پیش‌فرض False چون برای مدل abstractive
-                                    توصیه نمی‌شود. فقط برای آماده‌سازی
-                                    دیتاست آموزشی True کنید.
+                                    توصیه نمی‌شود.
 
         Returns:
             PreprocessingResult با تمام اطلاعات پردازش
@@ -248,8 +248,6 @@ class ArabicPreprocessingPipeline:
                     "مرحله ۴ کامل شد - NLTK. stopwords حذف‌شده: %d",
                     removed_count,
                 )
-
-                # شمارش مجدد کلمات بعد از حذف stopword
                 word_count = self._cleaner.count_words(normalized)
 
             return PreprocessingResult(
@@ -267,13 +265,8 @@ class ArabicPreprocessingPipeline:
                 f"خطای غیرمنتظره در pipeline پیش‌پردازش: {exc}"
             ) from exc
 
-    # ── اطلاعات pipeline ─────────────────────────────────────────
-
     def get_info(self) -> dict:
-        """
-        اطلاعات وضعیت pipeline را برمی‌گرداند.
-        برای debugging و health check مفید است.
-        """
+        """اطلاعات وضعیت pipeline را برمی‌گرداند."""
         return {
             "nltk_available": self._nltk_stopwords is not None,
             "nltk_stopwords_count": (
