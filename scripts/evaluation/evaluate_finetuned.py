@@ -39,70 +39,114 @@ logger = get_logger(__name__)
 # ══════════════════════════════════════════════════════════
 # Model Loading
 # ══════════════════════════════════════════════════════════
-
 def load_model_for_eval(model_path: str, device: str) -> tuple[Any, Any]:
     """
     مدل Fine-Tuned را برای evaluation بارگذاری می‌کند.
 
-    اولویت بارگذاری:
-    1. مدل merge‌شده (merged/) - بهترین برای inference
-    2. LoRA adapter (lora_adapter/) - اگر merge موجود نباشد
-    3. مدل پایه (فقط برای مقایسه baseline)
-
-    Args:
-        model_path: مسیر مدل
-        device: cpu یا cuda
-
-    Returns:
-        (model, tokenizer)
+    اولویت بارگذاری (اصلاح‌شده):
+    1. مدل merge‌شده (merged/)
+    2. LoRA adapter (lora_adapter/)
+    3. بهترین checkpoint موجود (checkpoint-*)
+    4. مدل پایه از HuggingFace (fallback نهایی)
     """
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
     path = Path(model_path)
-
-    # بررسی وجود مدل merge‌شده
-    merged_path = path / "merged"
-    lora_path = path / "lora_adapter"
-
-    if merged_path.exists():
-        actual_path = str(merged_path)
-        logger.info("بارگذاری مدل merge‌شده از: %s", actual_path)
-    elif lora_path.exists():
-        logger.info("بارگذاری LoRA adapter از: %s", lora_path)
-        # بارگذاری با PEFT
-        from peft import PeftModel
-        from transformers import AutoModelForSeq2SeqLM
-        cfg_loader = ConfigLoader()
-        base_model_id = cfg_loader.get("training", "model.base_model_id", "moussaKam/AraBART")
-        base_model = AutoModelForSeq2SeqLM.from_pretrained(base_model_id)
-        model = PeftModel.from_pretrained(base_model, str(lora_path))
-        model = model.merge_and_unload()
-        model.to(device)
-        model.eval()
-        tokenizer = AutoTokenizer.from_pretrained(str(lora_path))
-        logger.info("LoRA adapter بارگذاری و merge شد.")
-        return model, tokenizer
-    elif path.exists():
-        actual_path = str(path)
-        logger.info("بارگذاری مدل از: %s", actual_path)
-    else:
-        raise FileNotFoundError(
-            f"مدل در مسیر {model_path} پیدا نشد. "
-            "ابتدا finetune.py را اجرا کنید."
-        )
-
-    tokenizer = AutoTokenizer.from_pretrained(actual_path, use_fast=True)
-    model = AutoModelForSeq2SeqLM.from_pretrained(actual_path)
-    model.to(device)
-    model.eval()
-
-    param_count = sum(p.numel() for p in model.parameters())
-    logger.info(
-        "مدل بارگذاری شد: %s پارامتر | device: %s",
-        f"{param_count:,}",
-        device,
+    cfg_loader = ConfigLoader()
+    base_model_id = cfg_loader.get(
+        "training", "model.base_model_id", "moussaKam/AraBART"
     )
 
+    def _load_from_path(load_path: Path) -> tuple[Any, Any]:
+        """بارگذاری مدل از یک مسیر مشخص."""
+        tokenizer = AutoTokenizer.from_pretrained(str(load_path), use_fast=True)
+        model = AutoModelForSeq2SeqLM.from_pretrained(str(load_path))
+        model.to(device)
+        model.eval()
+        param_count = sum(p.numel() for p in model.parameters())
+        logger.info(
+            "مدل بارگذاری شد از '%s': %s پارامتر | device: %s",
+            load_path.name,
+            f"{param_count:,}",
+            device,
+        )
+        return model, tokenizer
+
+    # ── اولویت ۱: مدل merge‌شده ─────────────────────────────
+    merged_path = path / "merged"
+    if merged_path.exists() and (merged_path / "config.json").exists():
+        logger.info("بارگذاری مدل merge‌شده از: %s", merged_path)
+        return _load_from_path(merged_path)
+
+    # ── اولویت ۲: LoRA adapter ───────────────────────────────
+    lora_path = path / "lora_adapter"
+    if lora_path.exists() and (lora_path / "adapter_config.json").exists():
+        logger.info("بارگذاری LoRA adapter از: %s", lora_path)
+        try:
+            from peft import PeftModel
+            base_model = AutoModelForSeq2SeqLM.from_pretrained(base_model_id)
+            model = PeftModel.from_pretrained(base_model, str(lora_path))
+            model = model.merge_and_unload()
+            model.to(device)
+            model.eval()
+            tokenizer = AutoTokenizer.from_pretrained(str(lora_path), use_fast=True)
+            logger.info("LoRA adapter بارگذاری و merge شد.")
+            return model, tokenizer
+        except Exception as e:
+            logger.warning("بارگذاری LoRA ناموفق: %s — تلاش با checkpoint", e)
+
+    # ── اولویت ۳: بهترین checkpoint موجود ───────────────────
+    checkpoints = []
+    if path.exists():
+        checkpoints = sorted(
+            [d for d in path.iterdir()
+             if d.is_dir() and d.name.startswith("checkpoint-")
+             and (d / "config.json").exists()],
+            key=lambda d: int(d.name.split("-")[-1]),
+            reverse=True,  # جدیدترین checkpoint اول
+        )
+
+    if checkpoints:
+        best_checkpoint = checkpoints[0]
+        logger.info(
+            "مدل merge‌شده و LoRA پیدا نشد. "
+            "بارگذاری از آخرین checkpoint: %s",
+            best_checkpoint.name,
+        )
+        try:
+            # بررسی وجود adapter_config
+            if (best_checkpoint / "adapter_config.json").exists():
+                from peft import PeftModel
+                base_model = AutoModelForSeq2SeqLM.from_pretrained(base_model_id)
+                model = PeftModel.from_pretrained(base_model, str(best_checkpoint))
+                model = model.merge_and_unload()
+                model.to(device)
+                model.eval()
+                tokenizer = AutoTokenizer.from_pretrained(base_model_id, use_fast=True)
+                logger.info("LoRA checkpoint بارگذاری و merge شد.")
+                return model, tokenizer
+            else:
+                return _load_from_path(best_checkpoint)
+        except Exception as e:
+            logger.warning("بارگذاری checkpoint ناموفق: %s", e)
+
+    # ── اولویت ۴: مسیر مستقیم (اگر config.json داشت) ────────
+    if path.exists() and (path / "config.json").exists():
+        logger.info("بارگذاری مستقیم از: %s", path)
+        return _load_from_path(path)
+
+    # ── اولویت ۵: fallback به مدل پایه از HuggingFace ────────
+    logger.warning(
+        "هیچ مدل Fine-Tuned در '%s' پیدا نشد.\n"
+        "Fallback به مدل پایه '%s' از HuggingFace.\n"
+        "⚠️  این فقط برای تست ساختار کد است، نه ارزیابی واقعی!",
+        model_path,
+        base_model_id,
+    )
+    tokenizer = AutoTokenizer.from_pretrained(base_model_id, use_fast=True)
+    model = AutoModelForSeq2SeqLM.from_pretrained(base_model_id)
+    model.to(device)
+    model.eval()
     return model, tokenizer
 
 

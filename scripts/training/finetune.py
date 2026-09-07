@@ -451,56 +451,94 @@ def setup_lora(
 
 # ROUGE Metric for Trainer
 
-
 def create_compute_metrics(tokenizer: Any) -> Any:
     """
     تابع compute_metrics برای Seq2SeqTrainer.
 
-    این تابع در پایان هر epoch روی validation set اجرا می‌شود.
-    از ArabicRougeScorer پروژه استفاده می‌کند برای consistency.
+    اصلاح مهم نسبت به نسخه قبل:
+    - predictions ممکن است شامل مقادیر خارج از range باشند
+    - باید قبل از decode کلیپ شوند
+    - -100 و مقادیر منفی باید با pad_token_id جایگزین شوند
     """
     from arabic_summarizer.evaluation.rouge_scorer import ArabicRougeScorer
     rouge_scorer = ArabicRougeScorer()
 
     def compute_metrics(eval_pred) -> dict[str, float]:
+        import numpy as np
+
         predictions, labels = eval_pred
 
-        # decode predictions
         # predictions ممکن است tuple باشد
         if isinstance(predictions, tuple):
             predictions = predictions[0]
 
-        import numpy as np
-        # جایگزینی -100 با pad_token_id برای decode
-        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        # ── اصلاح اصلی: کلیپ کردن predictions ──────────────
+        # Seq2SeqTrainer ممکن است مقادیر خارج از vocab_size تولید کند
+        # یا مقادیر -100 داشته باشد که باید فیلتر شوند
+        vocab_size = tokenizer.vocab_size
+        pad_id = tokenizer.pad_token_id or 1
 
-        decoded_preds = tokenizer.batch_decode(
-            predictions,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True,
-        )
-        decoded_labels = tokenizer.batch_decode(
-            labels,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True,
-        )
+        if hasattr(predictions, 'tolist'):
+            # numpy array
+            predictions = np.clip(predictions, 0, vocab_size - 1).astype(np.int32)
+        
+        # جایگزینی -100 با pad_token_id در labels
+        labels = np.where(labels != -100, labels, pad_id)
+        labels = np.clip(labels, 0, vocab_size - 1).astype(np.int32)
 
-        # پاک‌سازی ساده
-        decoded_preds = [p.strip() for p in decoded_preds]
-        decoded_labels = [l.strip() for l in decoded_labels]
+        # ── Decode با error handling ──────────────────────────
+        decoded_preds = []
+        decoded_labels = []
+
+        for pred_ids, label_ids in zip(predictions, labels):
+            try:
+                pred_ids_list = [int(x) for x in pred_ids if 0 <= int(x) < vocab_size]
+                pred_text = tokenizer.decode(
+                    pred_ids_list,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=True,
+                )
+                decoded_preds.append(pred_text.strip())
+            except Exception:
+                decoded_preds.append("")
+
+            try:
+                label_ids_list = [int(x) for x in label_ids if 0 <= int(x) < vocab_size]
+                label_text = tokenizer.decode(
+                    label_ids_list,
+                    skip_special_tokens=True,
+                    clean_up_tokenization_spaces=True,
+                )
+                decoded_labels.append(label_text.strip())
+            except Exception:
+                decoded_labels.append("")
+
+        # فیلتر جفت‌های خالی
+        valid_pairs = [
+            (p, r) for p, r in zip(decoded_preds, decoded_labels)
+            if p and r
+        ]
+
+        if not valid_pairs:
+            return {"rouge1": 0.0, "rouge2": 0.0, "rougeL": 0.0}
+
+        valid_preds, valid_refs = zip(*valid_pairs)
 
         # محاسبه ROUGE
-        _, aggregate = rouge_scorer.score_batch(decoded_preds, decoded_labels)
-
-        return {
-            "rouge1": round(aggregate.rouge1, 4),
-            "rouge2": round(aggregate.rouge2, 4),
-            "rougeL": round(aggregate.rougeL, 4),
-        }
+        try:
+            _, aggregate = rouge_scorer.score_batch(
+                list(valid_preds), list(valid_refs)
+            )
+            return {
+                "rouge1": round(aggregate.rouge1, 4),
+                "rouge2": round(aggregate.rouge2, 4),
+                "rougeL": round(aggregate.rougeL, 4),
+            }
+        except Exception as e:
+            logger.warning("خطا در محاسبه ROUGE در compute_metrics: %s", e)
+            return {"rouge1": 0.0, "rouge2": 0.0, "rougeL": 0.0}
 
     return compute_metrics
-
-
 
 # Smoke Test
 
