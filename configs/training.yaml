@@ -1,25 +1,23 @@
-
-# تنظیمات Fine-Tuning  
-
+# ══════════════════════════════════════════════════════════
+# تنظیمات Fine-Tuning فاز ۲
+# اصلاح: مسیر dataset به training_ready تغییر کرد
+# ══════════════════════════════════════════════════════════
 
 model:
   base_model_id: "moussaKam/AraBART"
   tokenizer_id: "moussaKam/AraBART"
   max_source_length: 1024
   max_target_length: 128
-  # توضیح max_target_length:
-  #   میانگین طول summary در XL-Sum عربی ≈ 27 کلمه ≈ 45-60 توکن
-  #   128 توکن margin کافی می‌دهد بدون اتلاف حافظه
 
 dataset:
-  processed_dir: "data/processed"
+  # اصلاح مهم: مسیر واقعی داده آماده‌شده
+  processed_dir: "data/training_ready"
   source_name: "xlsum_arabic"
   train_file: "train.jsonl"
   validation_file: "validation.jsonl"
   test_file: "test.jsonl"
   text_field: "text"
   summary_field: "summary"
-  # محدودیت برای smoke test (null = همه داده)
   max_train_samples: null
   max_eval_samples: null
   max_test_samples: null
@@ -29,48 +27,47 @@ lora:
   lora_alpha: 32
   lora_dropout: 0.1
   bias: "none"
-  # target_modules برای AraBART (BART architecture):
-  # AraBART از MBartForConditionalGeneration یا BartForConditionalGeneration
-  # attention projections: q_proj, v_proj در encoder و decoder
-  # باید در smoke test verify شود
   target_modules:
     - "q_proj"
     - "v_proj"
+    - "k_proj"
+    - "out_proj"
   task_type: "SEQ_2_SEQ_LM"
 
 training:
   output_dir: "models/finetuned/arabart"
   num_train_epochs: 3
-  per_device_train_batch_size: 2
-  per_device_eval_batch_size: 4
-  gradient_accumulation_steps: 4
-  # effective batch size = 2 * 4 = 8
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 2
   learning_rate: 5.0e-5
   weight_decay: 0.01
   warmup_ratio: 0.05
   lr_scheduler_type: "cosine"
-  fp16: false   # در smoke test false - در Colab با GPU true می‌شود
+  # GPU: اینها در runtime بر اساس GPU تنظیم می‌شوند
+  fp16: false
   bf16: false
-  gradient_checkpointing: false
+  gradient_checkpointing: true
   seed: 42
-  dataloader_num_workers: 0
-  # ارزیابی و ذخیره
-  evaluation_strategy: "epoch"
-  save_strategy: "epoch"
+  dataloader_num_workers: 2
+  # ارزیابی: steps به جای epoch برای checkpoint بهتر
+  evaluation_strategy: "steps"
+  eval_steps: 500
+  save_strategy: "steps"
+  save_steps: 500
   load_best_model_at_end: true
   metric_for_best_model: "rougeL"
   greater_is_better: true
   save_total_limit: 3
-  # logging
   logging_dir: "reports/training/logs"
-  logging_steps: 50
+  logging_steps: 100
   report_to: "none"
-  # early stopping
   early_stopping_patience: 2
-  # generation در eval
   predict_with_generate: true
   generation_max_length: 128
   generation_num_beams: 4
+  # Resume از checkpoint
+  resume_from_checkpoint: null
 
 generation:
   num_beams: 4
@@ -82,25 +79,17 @@ generation:
   max_new_tokens: 128
 
 evaluation:
-  # BERTScore model برای عربی
   bertscore_model: "bert-base-multilingual-cased"
-  # تعداد نمونه برای BERTScore (گران‌قیمت است)
   bertscore_max_samples: 500
-  # تعداد نمونه کیفی
   qualitative_samples: 10
-  # latency benchmark
   benchmark_input_lengths: [300, 500, 1000, 1500, 2000]
   benchmark_warmup_runs: 2
   benchmark_timed_runs: 5
 
-# محدودیت مستند شده
 known_constraints:
   xlsum_avg_compression_ratio: 0.052
   product_target_compression_min: 0.10
   product_target_compression_max: 0.30
   strategy: >
-    آموزش روی reference summaries اصلی XL-Sum انجام می‌شود.
-    نسبت فشرده‌سازی هنگام inference با min_new_tokens/max_new_tokens
-    کنترل می‌شود. این دو مشکل جداگانه هستند:
-    1. کیفیت مدل (ROUGE) - با Fine-tuning بهبود می‌یابد
-    2. طول خروجی - با generation constraints کنترل می‌شود
+    آموزش روی reference summaries اصلی XL-Sum.
+    طول خروجی با generation constraints کنترل می‌شود.
