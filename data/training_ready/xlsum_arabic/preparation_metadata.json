@@ -1,0 +1,15 @@
+{
+  "prepared_at": "2026-09-06T14:42:44.645233+00:00",
+  "source": "xlsum_arabic",
+  "smoke_test": false,
+  "splits": {
+    "train": 19783,
+    "validation": 2517,
+    "test": 2482
+  },
+  "fields": {
+    "text": "text",
+    "summary": "summary"
+  },
+  "compression_constraint_note": "XL-Sum compression ratio ≈ 5%, product target 10-30%. Training on original references. Output length enforced at inference via generation constraints."
+}
